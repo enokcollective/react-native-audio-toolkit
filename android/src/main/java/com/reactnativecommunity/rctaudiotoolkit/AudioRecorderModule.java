@@ -11,6 +11,7 @@ import android.util.Log;
 import android.net.Uri;
 import android.webkit.URLUtil;
 import android.content.ContextWrapper;
+import android.content.Context;
 
 import com.facebook.react.bridge.Arguments;
 import com.facebook.react.bridge.ReactApplicationContext;
