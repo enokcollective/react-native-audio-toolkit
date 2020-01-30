@@ -42,6 +42,8 @@ public class AudioRecorderModule extends ReactContextBaseJavaModule implements
 
     private ReactApplicationContext context;
 
+    private AudioManager audioManager;
+
     public AudioRecorderModule(ReactApplicationContext reactContext) {
         super(reactContext);
         this.context = reactContext;
@@ -149,6 +151,11 @@ public class AudioRecorderModule extends ReactContextBaseJavaModule implements
     public void destroy(Integer recorderId, Callback callback) {
         MediaRecorder recorder = this.recorderPool.get(recorderId);
 
+        if (audioManager != null && audioManager.isBluetoothScoOn()) {
+            audioManager.setBluetoothScoOn(false);
+            audioManager.stopBluetoothSco();
+        }
+
         if (recorder != null) {
             recorder.release();
             this.recorderPool.remove(recorderId);
@@ -190,10 +197,12 @@ public class AudioRecorderModule extends ReactContextBaseJavaModule implements
         MediaRecorder recorder = new MediaRecorder();
 
         // TODO: allow configuring?
-        recorder.setAudioSource(MediaRecorder.AudioSource.MIC);
-
+        recorder.setAudioSource(MediaRecorder.AudioSource.DEFAULT);
+      
         if (audioInputDevice != null && android.os.Build.VERSION.SDK_INT >= 28) {
             recorder.setPreferredDevice(audioInputDevice);
+            audioManager.setBluetoothScoOn(true);
+            audioManager.startBluetoothSco();
         }
 
         int format = formatFromPath(path);
@@ -320,8 +329,8 @@ public class AudioRecorderModule extends ReactContextBaseJavaModule implements
     }
 
     private AudioDeviceInfo findAudioDevice(int deviceType) {
-        AudioManager manager = (AudioManager) new ContextWrapper(this.context).getSystemService(Context.AUDIO_SERVICE);
-        AudioDeviceInfo[] adis = manager.getDevices(AudioManager.GET_DEVICES_INPUTS);
+        audioManager = (AudioManager) new ContextWrapper(this.context).getSystemService(Context.AUDIO_SERVICE);
+        AudioDeviceInfo[] adis = audioManager.getDevices(AudioManager.GET_DEVICES_INPUTS);
         for (AudioDeviceInfo adi : adis) {
             if (adi.getType() == deviceType) {
                 return adi;
