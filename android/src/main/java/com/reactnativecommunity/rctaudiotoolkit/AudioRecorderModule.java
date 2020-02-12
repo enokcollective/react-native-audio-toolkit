@@ -1,5 +1,7 @@
 package com.reactnativecommunity.rctaudiotoolkit;
 
+import android.media.AudioManager;
+import android.media.AudioDeviceInfo;
 import android.annotation.TargetApi;
 import android.media.MediaRecorder;
 import android.os.Build;
@@ -9,6 +11,7 @@ import android.util.Log;
 import android.net.Uri;
 import android.webkit.URLUtil;
 import android.content.ContextWrapper;
+import android.content.Context;
 
 import com.facebook.react.bridge.Arguments;
 import com.facebook.react.bridge.ReactApplicationContext;
@@ -38,6 +41,8 @@ public class AudioRecorderModule extends ReactContextBaseJavaModule implements
     Map<Integer, Boolean> recorderAutoDestroy = new HashMap<>();
 
     private ReactApplicationContext context;
+
+    private AudioManager audioManager;
 
     public AudioRecorderModule(ReactApplicationContext reactContext) {
         super(reactContext);
@@ -146,6 +151,11 @@ public class AudioRecorderModule extends ReactContextBaseJavaModule implements
     public void destroy(Integer recorderId, Callback callback) {
         MediaRecorder recorder = this.recorderPool.get(recorderId);
 
+        if (audioManager != null && audioManager.isBluetoothScoOn()) {
+            audioManager.setBluetoothScoOn(false);
+            audioManager.stopBluetoothSco();
+        }
+
         if (recorder != null) {
             recorder.release();
             this.recorderPool.remove(recorderId);
@@ -177,7 +187,9 @@ public class AudioRecorderModule extends ReactContextBaseJavaModule implements
         Log.d(LOG_TAG, "Releasing old recorder...");
         destroy(recorderId);
 
+        AudioDeviceInfo audioInputDevice;
         Uri uri = uriFromPath(path);
+        audioInputDevice = findAudioDevice(AudioDeviceInfo.TYPE_BLUETOOTH_SCO);
 
         Log.d(LOG_TAG, uri.getPath());
 
@@ -185,7 +197,13 @@ public class AudioRecorderModule extends ReactContextBaseJavaModule implements
         MediaRecorder recorder = new MediaRecorder();
 
         // TODO: allow configuring?
-        recorder.setAudioSource(MediaRecorder.AudioSource.MIC);
+        recorder.setAudioSource(MediaRecorder.AudioSource.DEFAULT);
+      
+        if (audioInputDevice != null && android.os.Build.VERSION.SDK_INT >= 28) {
+            recorder.setPreferredDevice(audioInputDevice);
+            audioManager.setBluetoothScoOn(true);
+            audioManager.startBluetoothSco();
+        }
 
         int format = formatFromPath(path);
         int encoder = encoderFromPath(path);
@@ -308,6 +326,17 @@ public class AudioRecorderModule extends ReactContextBaseJavaModule implements
         } catch (Exception e) {
             callback.invoke(errObj("stopfail", e.toString()));
         }
+    }
+
+    private AudioDeviceInfo findAudioDevice(int deviceType) {
+        audioManager = (AudioManager) new ContextWrapper(this.context).getSystemService(Context.AUDIO_SERVICE);
+        AudioDeviceInfo[] adis = audioManager.getDevices(AudioManager.GET_DEVICES_INPUTS);
+        for (AudioDeviceInfo adi : adis) {
+            if (adi.getType() == deviceType) {
+                return adi;
+            }
+        }
+        return null;
     }
 
     // Find recorderId matching recorder from recorderPool
